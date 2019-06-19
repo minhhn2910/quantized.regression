@@ -75,33 +75,51 @@ parser.add_argument('--seed', default=123, type=int,
                     help='random seed (default: 123)')
 
 
-# dataset
-x_train = np.loadtxt("./input.txt", delimiter=",", dtype=np.float32).reshape(-1,4)
+x_train = []
+y_train = []
+x_test = []
+y_test = []
+def prepare_data(model_name):
+    global x_train,y_train,x_test,y_test
+    # dataset
+    if model_name == 'twomlp_quantized_jmeint':
+        x_train = np.loadtxt("./data/jmeint/input.txt", dtype=np.float32).flatten().reshape(-1,18)
+        y_train = np.loadtxt("./data/jmeint/output.txt",dtype=np.float32).flatten().reshape(-1,1)
+        newlen = int(len(x_train)/4)*4
+        y_train[y_train >= 0.0001] = 0.5
+        y_train[y_train <= 0.0001] = -0.5
+    if model_name == 'twomlp_quantized_blackscholes':
+        x_train = np.loadtxt("./data/blackschole/input.txt", delimiter = ',', dtype=np.float32).flatten().reshape(-1,5)
+        y_train = np.loadtxt("./data/blackschole/output.txt", delimiter =',', dtype=np.float32).flatten().reshape(-1,1)
+        newlen = int(len(x_train)/3)*3
+
+    x_train = x_train[:newlen,:]
+    y_train = y_train[:newlen,:]
+    if model_name == 'twomlp_quantized_blackscholes':
+        x_train = x_train.flatten().reshape(-1,15)
+        y_train = y_train.flatten().reshape(-1,3)
+
+    
+
+    scaler = StandardScaler()
+    scaler.fit(x_train)
+    print ("scaler parameter " )
+    print (scaler.mean_)
+    print (scaler.scale_)
+    print ("prescale: ")
+    print (x_train[0])
+    print ("after: ")
+    #x_train = scaler.transform(x_train)
+    new_size = (len(x_train)) - int (len(x_train)/10) #10% validation set
+    x_test = x_train[new_size:,:]
+    y_test = y_train[new_size:,:]
+    x_train = x_train[:new_size,:]
+    y_train = y_train[:new_size,:]
+    print (x_train[0])
+    print (x_train.shape)
+    print (y_test.shape)
 
 
-y_train = np.loadtxt("./output.txt", delimiter=",",dtype=np.float32).reshape(-1,1)
-newlen = int(len(x_train)/4)*4
-x_train = x_train[:newlen,:]
-y_train = y_train[:newlen,:]
-x_train = x_train.flatten().reshape(-1,16)
-y_train = y_train.flatten().reshape(-1,4)
-
-scaler = StandardScaler()
-scaler.fit(x_train)
-print ("scaler parameter " )
-print (scaler.mean_)
-print (scaler.scale_)
-print ("prescale: ")
-print (x_train[0])
-x_train = scaler.transform(x_train)
-new_size = (len(x_train)) - 20000
-x_test = x_train[new_size:,:]
-y_test = y_train[new_size:,:]
-x_train = x_train[:new_size,:]
-y_train = y_train[:new_size,:]
-
-print (x_train.shape)
-print (y_test.shape)
 batch_size = 200
 
 class TrainDataset(torch.utils.data.Dataset):
@@ -214,6 +232,16 @@ def main():
     if args.evaluate:
         model.eval()
         predicted = model(torch.from_numpy(x_test).to(args.device)).detach().cpu().numpy()
+        if args.model == 'twomlp_quantized_jmeint':
+            predicted [predicted<=0] = 0
+            predicted [predicted>0] = 1
+            y_test [y_test<=0] = 0
+            y_test [y_test>0] = 1
+            miss = 0
+            for i in range(len(predicted.flatten())):
+                if (y_test.flatten()[i] != predicted.flatten()[i]):
+                    miss = miss +1
+            print ("miss ", miss, " perc ", float(miss)/float(len(predicted.flatten())) )
         print(sum(np.abs(predicted.flatten() - y_test.flatten())) / len(predicted.flatten()))
         print(sum(np.abs(predicted.flatten() - y_test.flatten())) / sum(y_test.flatten()))
         print ("avg rel err")

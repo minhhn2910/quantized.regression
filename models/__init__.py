@@ -11,4 +11,4 @@ from .mnist import *
 from .mnist_quantized import *
 from .twomlp import *
 from .twomlp_quantized import *
-from .twomlp_quantized2 import *
+from .twomlp_quantized_jmeint import *

@@ -52,7 +52,7 @@ class UniformQuantize(InplaceFunction):
         qmax = 2.**num_bits - 1.
         #import pdb; pdb.set_trace()
         scale = (max_value - min_value) / (qmax - qmin)
-        print("scale min max ", scale, min_value,max_value)
+        #print("scale min max ", scale, min_value,max_value)
         scale = max(scale, 1e-8)
 
         if enforce_true_zero:
@@ -168,6 +168,8 @@ class QuantMeasure(nn.Module):
         else:
             min_value = self.running_min
             max_value = self.running_max
+        #print ("quantize input")
+        #print (min_value, " ", max_value )
         return quantize(input, self.num_bits, min_value=float(min_value), max_value=float(max_value), num_chunks=16)
 
 
