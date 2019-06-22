@@ -12,3 +12,4 @@ from .mnist_quantized import *
 from .twomlp import *
 from .twomlp_quantized import *
 from .twomlp_quantized_jmeint import *
+from .mlp_quantized_gammacorrection import *

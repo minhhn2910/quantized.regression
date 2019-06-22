@@ -75,10 +75,10 @@ parser.add_argument('--seed', default=123, type=int,
                     help='random seed (default: 123)')
 
 
-x_train = []
-y_train = []
-x_test = []
-y_test = []
+x_train = np.array([])
+y_train = np.array([])
+x_test = np.array([])
+y_test = np.array([])
 def prepare_data(model_name):
     global x_train,y_train,x_test,y_test
     # dataset
@@ -92,14 +92,21 @@ def prepare_data(model_name):
         x_train = np.loadtxt("./data/blackschole/input.txt", delimiter = ',', dtype=np.float32).flatten().reshape(-1,5)
         y_train = np.loadtxt("./data/blackschole/output.txt", delimiter =',', dtype=np.float32).flatten().reshape(-1,1)
         newlen = int(len(x_train)/3)*3
+    if model_name == 'mlp_quantized_gammacorrection':
+        x_train = np.loadtxt("./data/gammacorrection/input.txt", delimiter = ',', dtype=np.float32).flatten().reshape(-1,4)
+        y_train = np.loadtxt("./data/gammacorrection/output.txt", delimiter =',', dtype=np.float32).flatten().reshape(-1,3)
+        newlen = int(len(x_train)/4)*4
 
     x_train = x_train[:newlen,:]
     y_train = y_train[:newlen,:]
     if model_name == 'twomlp_quantized_blackscholes':
         x_train = x_train.flatten().reshape(-1,15)
         y_train = y_train.flatten().reshape(-1,3)
+    if model_name == 'mlp_quantized_gammacorrection':
+        x_train = x_train.flatten().reshape(-1,16)
+        y_train = y_train.flatten().reshape(-1,12)
 
-    
+
 
     scaler = StandardScaler()
     scaler.fit(x_train)
@@ -109,7 +116,8 @@ def prepare_data(model_name):
     print ("prescale: ")
     print (x_train[0])
     print ("after: ")
-    #x_train = scaler.transform(x_train)
+    x_train = scaler.transform(x_train)
+    y_train = y_train /255.0
     new_size = (len(x_train)) - int (len(x_train)/10) #10% validation set
     x_test = x_train[new_size:,:]
     y_test = y_train[new_size:,:]
@@ -121,7 +129,10 @@ def prepare_data(model_name):
 
 
 batch_size = 200
-
+train_dataset =[]
+train_loader =[]
+val_dataset =[]
+val_loader = []
 class TrainDataset(torch.utils.data.Dataset):
     def __init__(self):
         pass
@@ -139,21 +150,28 @@ class TestDataset(torch.utils.data.Dataset):
     def __len__(self):
         # You should change 0 to the total size of your dataset.
         return y_test.shape[0]
-train_dataset = TrainDataset()
-train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                           batch_size=batch_size,
-                                           shuffle=True)
 
-val_dataset = TestDataset()
-val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                           batch_size=batch_size,
-                                           shuffle=True)
 def main():
     global args, best_prec1, dtype
-    best_prec1 = 0
+    global train_dataset, train_loader, val_dataset, val_loader
     args = parser.parse_args()
     dtype = torch_dtypes.get(args.dtype)
     torch.manual_seed(args.seed)
+    best_prec1 = 0
+    if args.model:
+        prepare_data(args.model)
+
+    train_dataset = TrainDataset()
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
+                                               batch_size=batch_size,
+                                               shuffle=True)
+
+    val_dataset = TestDataset()
+    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
+                                               batch_size=batch_size,
+                                               shuffle=True)
+
+
     time_stamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     if args.evaluate:
         args.results_dir = '/tmp'
@@ -245,7 +263,9 @@ def main():
         print(sum(np.abs(predicted.flatten() - y_test.flatten())) / len(predicted.flatten()))
         print(sum(np.abs(predicted.flatten() - y_test.flatten())) / sum(y_test.flatten()))
         print ("avg rel err")
-        print (sum(np.abs(predicted.flatten() - y_test.flatten())/np.abs(y_test.flatten())) / len(predicted.flatten()))
+        temp = y_test.flatten()
+        indices = np.nonzero(temp)
+        print (sum(np.abs(predicted.flatten()[indices] - y_test.flatten()[indices])/np.abs(y_test.flatten()[indices])) / len(predicted.flatten()[indices]))
         print(y_test[:16])
         print ("predict")
         print(predicted[:16])
@@ -291,10 +311,10 @@ def main():
             'regime': 0
         }, is_best, path=save_path)
         logging.info('\n Epoch: {0}\t'
-                     'Training Loss {train_loss:.4f} \t\t\t'
+                     'Training Loss {train_loss:.6f} \t\t\t'
                      #'Training Prec@1 {train_prec1:.3f} \t'
                      #'Training Prec@5 {train_prec5:.3f} \t'
-                     'Validation Loss {val_loss:.4f} \t\t\t'
+                     'Validation Loss {val_loss:.6f} \t\t\t'
                      #'Validation Prec@1 {val_prec1:.3f} \t'
                      #'Validation Prec@5 {val_prec5:.3f} \n'
                      .format(epoch + 1, train_loss=train_loss, val_loss=val_loss,
